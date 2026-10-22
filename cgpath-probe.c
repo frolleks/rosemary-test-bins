@@ -49,8 +49,7 @@ typedef struct CGPathElement {
   CGPoint *points;
 } CGPathElement;
 
-typedef void (*CGPathApplierFunction)(void *info,
-                                      const CGPathElement *element);
+typedef void (*CGPathApplierFunction)(void *info, const CGPathElement *element);
 
 typedef enum CGLineCap {
   kCGLineCapButt,
@@ -68,21 +67,25 @@ extern const CGAffineTransform CGAffineTransformIdentity;
 
 extern CGMutablePathRef CGPathCreateMutable(void);
 extern CGPathRef CGPathCreateCopy(CGPathRef path);
-extern CGPathRef CGPathCreateCopyByTransformingPath(
-    CGPathRef path, const CGAffineTransform *transform);
+extern CGPathRef
+CGPathCreateCopyByTransformingPath(CGPathRef path,
+                                   const CGAffineTransform *transform);
 extern CGMutablePathRef CGPathCreateMutableCopy(CGPathRef path);
-extern CGMutablePathRef CGPathCreateMutableCopyByTransformingPath(
-    CGPathRef path, const CGAffineTransform *transform);
+extern CGMutablePathRef
+CGPathCreateMutableCopyByTransformingPath(CGPathRef path,
+                                          const CGAffineTransform *transform);
 extern CGPathRef CGPathCreateWithRect(CGRect rect,
                                       const CGAffineTransform *transform);
-extern CGPathRef CGPathCreateWithEllipseInRect(
-    CGRect rect, const CGAffineTransform *transform);
-extern CGPathRef CGPathCreateWithRoundedRect(
-    CGRect rect, CGFloat cornerWidth, CGFloat cornerHeight,
-    const CGAffineTransform *transform);
-extern CGPathRef CGPathCreateCopyByDashingPath(
-    CGPathRef path, const CGAffineTransform *transform, CGFloat phase,
-    const CGFloat *lengths, size_t count);
+extern CGPathRef
+CGPathCreateWithEllipseInRect(CGRect rect, const CGAffineTransform *transform);
+extern CGPathRef
+CGPathCreateWithRoundedRect(CGRect rect, CGFloat cornerWidth,
+                            CGFloat cornerHeight,
+                            const CGAffineTransform *transform);
+extern CGPathRef
+CGPathCreateCopyByDashingPath(CGPathRef path,
+                              const CGAffineTransform *transform, CGFloat phase,
+                              const CGFloat *lengths, size_t count);
 extern CGPathRef CGPathCreateCopyByStrokingPath(
     CGPathRef path, const CGAffineTransform *transform, CGFloat lineWidth,
     CGLineCap lineCap, CGLineJoin lineJoin, CGFloat miterLimit);
@@ -99,17 +102,16 @@ extern CGPathRef CGPathCreateCopyByUnioningPath(CGPathRef path1,
 extern CGPathRef CGPathCreateCopyBySubtractingPath(CGPathRef path1,
                                                    CGPathRef path2,
                                                    bool evenOddFillRule);
-extern CGPathRef CGPathCreateCopyBySymmetricDifferenceOfPath(
-    CGPathRef path1, CGPathRef path2, bool evenOddFillRule);
-extern CGPathRef CGPathCreateCopyByLinearlyInterpolatingPaths(
-    CGPathRef path1, CGPathRef path2, CGFloat t);
+extern CGPathRef
+CGPathCreateCopyBySymmetricDifferenceOfPath(CGPathRef path1, CGPathRef path2,
+                                            bool evenOddFillRule);
 
 extern void CGPathRelease(CGPathRef path);
 extern CGPathRef CGPathRetain(CGPathRef path);
 extern bool CGPathEqualToPath(CGPathRef path1, CGPathRef path2);
 
-extern void CGPathMoveToPoint(CGMutablePathRef path,
-                              const CGAffineTransform *m, CGFloat x, CGFloat y);
+extern void CGPathMoveToPoint(CGMutablePathRef path, const CGAffineTransform *m,
+                              CGFloat x, CGFloat y);
 extern void CGPathAddLineToPoint(CGMutablePathRef path,
                                  const CGAffineTransform *m, CGFloat x,
                                  CGFloat y);
@@ -432,13 +434,6 @@ int main(void) {
       CGPathCreateCopyBySymmetricDifferenceOfPath(rect_a, rect_b, false);
   show("symmetric-difference", symmetric);
   CGPathRelease(symmetric);
-
-  printf("case interpolate\n");
-  /* Two rectangles built the same way, so the element sequences line up. */
-  CGPathRef interpolated =
-      CGPathCreateCopyByLinearlyInterpolatingPaths(rect_a, rect_b, 0.5);
-  show("interpolated", interpolated);
-  CGPathRelease(interpolated);
 
   printf("case introspection\n");
   point("current-base", CGPathGetCurrentPoint(base));
