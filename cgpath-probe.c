@@ -250,7 +250,7 @@ static void print_element(void *info, const CGPathElement *element) {
 /* Everything the introspection functions say about one path. The rectangle
  * handed to `CGPathIsRect` is zeroed first so that a false answer still prints
  * the same four numbers on both implementations. */
-static void show(const char *label, CGPathRef path) {
+static void show(const char *label, CGPathRef path, CGPoint probe) {
   CGRect is_rect = {{0.0, 0.0}, {0.0, 0.0}};
 
   printf("path %s\n", label);
@@ -263,11 +263,22 @@ static void show(const char *label, CGPathRef path) {
   boolean("is-rect", CGPathIsRect(path, &is_rect));
   rect("rect", is_rect);
   /* The same point under both fill rules: a path that crosses itself is where
-   * the two disagree. */
-  boolean("contains-eo",
-          CGPathContainsPoint(path, NULL, (CGPoint){5.0, 5.0}, true));
-  boolean("contains-nonzero",
-          CGPathContainsPoint(path, NULL, (CGPoint){5.0, 5.0}, false));
+   * the two disagree. The point is chosen per case so it is not on a vertex or
+   * a chord. */
+  boolean("contains-eo", CGPathContainsPoint(path, NULL, probe, true));
+  boolean("contains-nonzero", CGPathContainsPoint(path, NULL, probe, false));
+}
+
+/* The parts of `show` that must agree even when the geometry cannot: the
+ * filled region's tight bounds and two hit tests. Dashing, stroking and the
+ * boolean forms are built by different algorithms on the two sides, so their
+ * element lists are not comparable. */
+static void show_summary(const char *label, CGPathRef path, CGPoint probe) {
+  printf("path %s\n", label);
+  boolean("empty", CGPathIsEmpty(path));
+  rect("path-bbox", CGPathGetPathBoundingBox(path));
+  boolean("contains-eo", CGPathContainsPoint(path, NULL, probe, true));
+  boolean("contains-nonzero", CGPathContainsPoint(path, NULL, probe, false));
 }
 
 int main(void) {
@@ -276,7 +287,7 @@ int main(void) {
 
   printf("case create-mutable\n");
   CGMutablePathRef base = CGPathCreateMutable();
-  show("empty-mutable", base);
+  show("empty-mutable", base, (CGPoint){5.0, 5.0});
 
   printf("case build\n");
   CGPathMoveToPoint(base, &identity, 0.0, 0.0);
@@ -284,130 +295,130 @@ int main(void) {
   CGPathAddQuadCurveToPoint(base, NULL, 15.0, 5.0, 10.0, 10.0);
   CGPathAddCurveToPoint(base, NULL, 8.0, 12.0, 2.0, 12.0, 0.0, 10.0);
   CGPathCloseSubpath(base);
-  show("base", base);
+  show("base", base, (CGPoint){5.0, 5.0});
 
   printf("case add-rect\n");
   CGMutablePathRef p = CGPathCreateMutable();
   CGPathAddRect(p, NULL, (CGRect){{1.0, 2.0}, {3.0, 4.0}});
-  show("add-rect", p);
+  show("add-rect", p, (CGPoint){2.0, 3.0});
   CGPathRelease(p);
 
   printf("case add-rects\n");
   p = CGPathCreateMutable();
   CGRect rects[2] = {{{0.0, 0.0}, {2.0, 2.0}}, {{4.0, 4.0}, {2.0, 2.0}}};
   CGPathAddRects(p, NULL, rects, 2);
-  show("add-rects", p);
+  show("add-rects", p, (CGPoint){1.0, 1.0});
   CGPathRelease(p);
 
   printf("case add-lines\n");
   p = CGPathCreateMutable();
   CGPoint lines[3] = {{0.0, 0.0}, {5.0, 5.0}, {10.0, 0.0}};
   CGPathAddLines(p, NULL, lines, 3);
-  show("add-lines", p);
+  show("add-lines", p, (CGPoint){5.0, 5.0});
   CGPathRelease(p);
 
   printf("case add-ellipse\n");
   p = CGPathCreateMutable();
   CGPathAddEllipseInRect(p, NULL, (CGRect){{0.0, 0.0}, {10.0, 6.0}});
-  show("add-ellipse", p);
+  show("add-ellipse", p, (CGPoint){5.0, 3.0});
   CGPathRelease(p);
 
   printf("case add-relative-arc\n");
   p = CGPathCreateMutable();
   CGPathAddRelativeArc(p, NULL, 5.0, 5.0, 4.0, 0.0, pi / 2.0);
-  show("add-relative-arc", p);
+  show("add-relative-arc", p, (CGPoint){8.0, 7.0});
   CGPathRelease(p);
 
   printf("case add-arc-clockwise\n");
   p = CGPathCreateMutable();
   CGPathAddArc(p, NULL, 5.0, 5.0, 4.0, 0.0, pi, true);
-  show("add-arc-clockwise", p);
+  show("add-arc-clockwise", p, (CGPoint){5.0, 4.0});
   CGPathRelease(p);
 
   printf("case add-arc-counterclockwise\n");
   p = CGPathCreateMutable();
   CGPathAddArc(p, NULL, 5.0, 5.0, 4.0, 0.0, pi, false);
-  show("add-arc-counterclockwise", p);
+  show("add-arc-counterclockwise", p, (CGPoint){5.0, 6.0});
   CGPathRelease(p);
 
   printf("case add-arc-to-point\n");
   p = CGPathCreateMutable();
   CGPathMoveToPoint(p, NULL, 0.0, 0.0);
   CGPathAddArcToPoint(p, NULL, 5.0, 0.0, 5.0, 5.0, 2.0);
-  show("add-arc-to-point", p);
+  show("add-arc-to-point", p, (CGPoint){5.0, 5.0});
   CGPathRelease(p);
 
   printf("case add-rounded-rect\n");
   p = CGPathCreateMutable();
   CGPathAddRoundedRect(p, NULL, (CGRect){{0.0, 0.0}, {10.0, 8.0}}, 2.0, 2.0);
-  show("add-rounded-rect", p);
+  show("add-rounded-rect", p, (CGPoint){5.0, 4.0});
   CGPathRelease(p);
 
   printf("case add-path\n");
   p = CGPathCreateMutable();
   CGPathAddPath(p, &scale, base);
-  show("add-path", p);
+  show("add-path", p, (CGPoint){5.0, 5.0});
   CGPathRelease(p);
 
   printf("case create-with-rect\n");
   CGPathRef with_rect =
       CGPathCreateWithRect((CGRect){{0.0, 0.0}, {10.0, 10.0}}, NULL);
-  show("create-with-rect", with_rect);
+  show("create-with-rect", with_rect, (CGPoint){5.0, 5.0});
   CGPathRelease(with_rect);
 
   printf("case create-with-ellipse\n");
   CGPathRef with_ellipse =
       CGPathCreateWithEllipseInRect((CGRect){{0.0, 0.0}, {10.0, 6.0}}, NULL);
-  show("create-with-ellipse", with_ellipse);
+  show("create-with-ellipse", with_ellipse, (CGPoint){5.0, 3.0});
   CGPathRelease(with_ellipse);
 
   printf("case create-with-rounded-rect\n");
   CGPathRef with_rounded = CGPathCreateWithRoundedRect(
       (CGRect){{0.0, 0.0}, {10.0, 8.0}}, 2.0, 2.0, NULL);
-  show("create-with-rounded-rect", with_rounded);
+  show("create-with-rounded-rect", with_rounded, (CGPoint){5.0, 4.0});
   CGPathRelease(with_rounded);
 
   printf("case copy\n");
   CGPathRef copy = CGPathCreateCopy(base);
-  show("copy", copy);
+  show("copy", copy, (CGPoint){5.0, 5.0});
   CGPathRelease(copy);
 
   printf("case mutable-copy\n");
   CGMutablePathRef mutable_copy = CGPathCreateMutableCopy(base);
-  show("mutable-copy", mutable_copy);
+  show("mutable-copy", mutable_copy, (CGPoint){5.0, 5.0});
   CGPathRelease(mutable_copy);
 
   printf("case transformed-copy\n");
   CGPathRef transformed = CGPathCreateCopyByTransformingPath(base, &scale);
-  show("transformed-copy", transformed);
+  show("transformed-copy", transformed, (CGPoint){5.0, 5.0});
   CGPathRelease(transformed);
 
   printf("case mutable-transformed-copy\n");
   CGMutablePathRef mutable_transformed =
       CGPathCreateMutableCopyByTransformingPath(base, &scale);
-  show("mutable-transformed-copy", mutable_transformed);
+  show("mutable-transformed-copy", mutable_transformed, (CGPoint){5.0, 5.0});
   CGPathRelease(mutable_transformed);
 
   printf("case dashed-copy\n");
   CGFloat dashes[2] = {2.0, 1.0};
   CGPathRef dashed = CGPathCreateCopyByDashingPath(base, NULL, 0.5, dashes, 2);
-  show("dashed-copy", dashed);
+  show_summary("dashed-copy", dashed, (CGPoint){5.0, 5.0});
   CGPathRelease(dashed);
 
   printf("case stroked-copy\n");
   CGPathRef stroked = CGPathCreateCopyByStrokingPath(
       base, NULL, 1.0, kCGLineCapRound, kCGLineJoinRound, 10.0);
-  show("stroked-copy", stroked);
+  show_summary("stroked-copy", stroked, (CGPoint){5.0, 5.0});
   CGPathRelease(stroked);
 
   printf("case flattened-copy\n");
   CGPathRef flattened = CGPathCreateCopyByFlattening(base, 0.5);
-  show("flattened-copy", flattened);
+  show("flattened-copy", flattened, (CGPoint){5.0, 5.0});
   CGPathRelease(flattened);
 
   printf("case normalized-copy\n");
   CGPathRef normalized = CGPathCreateCopyByNormalizing(base, false);
-  show("normalized-copy", normalized);
+  show_summary("normalized-copy", normalized, (CGPoint){5.0, 5.0});
   CGPathRelease(normalized);
 
   printf("case boolean\n");
@@ -418,21 +429,21 @@ int main(void) {
 
   CGPathRef intersect =
       CGPathCreateCopyByIntersectingPath(rect_a, rect_b, false);
-  show("intersect", intersect);
+  show_summary("intersect", intersect, (CGPoint){7.5, 7.5});
   CGPathRelease(intersect);
 
   CGPathRef unioned = CGPathCreateCopyByUnioningPath(rect_a, rect_b, false);
-  show("union", unioned);
+  show_summary("union", unioned, (CGPoint){7.5, 7.5});
   CGPathRelease(unioned);
 
   CGPathRef subtracted =
       CGPathCreateCopyBySubtractingPath(rect_a, rect_b, false);
-  show("subtract", subtracted);
+  show_summary("subtract", subtracted, (CGPoint){2.0, 2.0});
   CGPathRelease(subtracted);
 
   CGPathRef symmetric =
       CGPathCreateCopyBySymmetricDifferenceOfPath(rect_a, rect_b, false);
-  show("symmetric-difference", symmetric);
+  show_summary("symmetric-difference", symmetric, (CGPoint){2.0, 2.0});
   CGPathRelease(symmetric);
 
   printf("case introspection\n");
@@ -456,7 +467,9 @@ int main(void) {
   CGPathRelease(copy2);
   CGPathRelease(other);
 
-  printf("type-id %lu\n", (unsigned long)CGPathGetTypeID());
+  /* `CFTypeID` is opaque: the value differs between implementations, so only
+   * the fact that there is one is comparable. */
+  printf("type-id-nonzero %d\n", CGPathGetTypeID() != 0);
 
 #ifdef __BLOCKS__
   printf("case apply-with-block\n");
