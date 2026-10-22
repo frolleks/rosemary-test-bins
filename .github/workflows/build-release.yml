@@ -1,0 +1,92 @@
+name: Build and release
+
+# Builds the CoreGraphics probe on a macOS runner and publishes the binaries
+# as a GitHub release. Push a tag (e.g. `v1.0.0`) to cut a release; run the
+# workflow manually to get the binaries as a downloadable workflow artifact
+# without creating a release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build on macOS
+    runs-on: macos-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          uname -a
+          cc --version
+          xcrun --show-sdk-path
+
+      # The documented recipe: an x86_64 guest binary to run under rosemary.
+      - name: Compile x86_64
+        run: cc -arch x86_64 -framework CoreGraphics -o cgtransform_probe cgtransform-probe.c
+
+      # A native slice so the output can be checked on the arm64 runner
+      # without depending on Rosetta.
+      - name: Compile arm64
+        run: cc -arch arm64 -framework CoreGraphics -o cgtransform_probe_arm64 cgtransform-probe.c
+
+      - name: Build universal binary
+        run: lipo -create -output cgtransform_probe_universal cgtransform_probe cgtransform_probe_arm64
+
+      - name: Verify architectures
+        run: |
+          file cgtransform_probe cgtransform_probe_arm64 cgtransform_probe_universal
+          lipo -info cgtransform_probe_universal
+
+      - name: Smoke test (native)
+        run: |
+          case "$(uname -m)" in
+            arm64) native=cgtransform_probe_arm64 ;;
+            *)     native=cgtransform_probe ;;
+          esac
+          "./$native" > expected.txt
+          cat expected.txt
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          name="cgtransform-probe-${GITHUB_REF_NAME}-macos"
+          mkdir -p "dist/$name"
+          cp cgtransform_probe \
+             cgtransform_probe_arm64 \
+             cgtransform_probe_universal \
+             cgtransform-probe.c \
+             expected.txt \
+             "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          ( cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256" )
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cgtransform-probe-macos
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true
