@@ -1,8 +1,9 @@
 /* What the path API answers, printed so that two implementations can be
  * compared line for line.
  *
- * Built against the real CoreGraphics headers, so the declarations are the
- * SDK's rather than a hand-written copy.
+ * Freestanding on purpose: the declarations below are
+ * <CoreGraphics/CGPath.h>'s, spelled out so the program builds without a
+ * macOS SDK. See build-guest.sh for the cross-compile recipe.
  *
  *     cc -arch x86_64 -fblocks -framework CoreGraphics -o cgpath_probe
  * cgpath-probe.c
@@ -12,9 +13,153 @@
  * The two must print the same thing.
  */
 
-#include <CoreGraphics/CoreGraphics.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
+
+typedef double CGFloat;
+
+typedef struct CGPoint {
+  CGFloat x, y;
+} CGPoint;
+typedef struct CGSize {
+  CGFloat width, height;
+} CGSize;
+typedef struct CGRect {
+  CGPoint origin;
+  CGSize size;
+} CGRect;
+typedef struct CGAffineTransform {
+  CGFloat a, b, c, d, tx, ty;
+} CGAffineTransform;
+
+typedef struct CGPath *CGMutablePathRef;
+typedef const struct CGPath *CGPathRef;
+
+typedef enum CGPathElementType {
+  kCGPathElementMoveToPoint,
+  kCGPathElementAddLineToPoint,
+  kCGPathElementAddQuadCurveToPoint,
+  kCGPathElementAddCurveToPoint,
+  kCGPathElementCloseSubpath
+} CGPathElementType;
+
+typedef struct CGPathElement {
+  CGPathElementType type;
+  CGPoint *points;
+} CGPathElement;
+
+typedef void (*CGPathApplierFunction)(void *info,
+                                      const CGPathElement *element);
+
+typedef enum CGLineCap {
+  kCGLineCapButt,
+  kCGLineCapRound,
+  kCGLineCapSquare
+} CGLineCap;
+
+typedef enum CGLineJoin {
+  kCGLineJoinMiter,
+  kCGLineJoinRound,
+  kCGLineJoinBevel
+} CGLineJoin;
+
+extern const CGAffineTransform CGAffineTransformIdentity;
+
+extern CGMutablePathRef CGPathCreateMutable(void);
+extern CGPathRef CGPathCreateCopy(CGPathRef path);
+extern CGPathRef CGPathCreateCopyByTransformingPath(
+    CGPathRef path, const CGAffineTransform *transform);
+extern CGMutablePathRef CGPathCreateMutableCopy(CGPathRef path);
+extern CGMutablePathRef CGPathCreateMutableCopyByTransformingPath(
+    CGPathRef path, const CGAffineTransform *transform);
+extern CGPathRef CGPathCreateWithRect(CGRect rect,
+                                      const CGAffineTransform *transform);
+extern CGPathRef CGPathCreateWithEllipseInRect(
+    CGRect rect, const CGAffineTransform *transform);
+extern CGPathRef CGPathCreateWithRoundedRect(
+    CGRect rect, CGFloat cornerWidth, CGFloat cornerHeight,
+    const CGAffineTransform *transform);
+extern CGPathRef CGPathCreateCopyByDashingPath(
+    CGPathRef path, const CGAffineTransform *transform, CGFloat phase,
+    const CGFloat *lengths, size_t count);
+extern CGPathRef CGPathCreateCopyByStrokingPath(
+    CGPathRef path, const CGAffineTransform *transform, CGFloat lineWidth,
+    CGLineCap lineCap, CGLineJoin lineJoin, CGFloat miterLimit);
+extern CGPathRef CGPathCreateCopyByFlattening(CGPathRef path,
+                                              CGFloat flatteningThreshold);
+extern CGPathRef CGPathCreateCopyByNormalizing(CGPathRef path,
+                                               bool evenOddFillRule);
+extern CGPathRef CGPathCreateCopyByIntersectingPath(CGPathRef path1,
+                                                    CGPathRef path2,
+                                                    bool evenOddFillRule);
+extern CGPathRef CGPathCreateCopyByUnioningPath(CGPathRef path1,
+                                                CGPathRef path2,
+                                                bool evenOddFillRule);
+extern CGPathRef CGPathCreateCopyBySubtractingPath(CGPathRef path1,
+                                                   CGPathRef path2,
+                                                   bool evenOddFillRule);
+extern CGPathRef CGPathCreateCopyBySymmetricDifferenceOfPath(
+    CGPathRef path1, CGPathRef path2, bool evenOddFillRule);
+extern CGPathRef CGPathCreateCopyByLinearlyInterpolatingPaths(
+    CGPathRef path1, CGPathRef path2, CGFloat t);
+
+extern void CGPathRelease(CGPathRef path);
+extern CGPathRef CGPathRetain(CGPathRef path);
+extern bool CGPathEqualToPath(CGPathRef path1, CGPathRef path2);
+
+extern void CGPathMoveToPoint(CGMutablePathRef path,
+                              const CGAffineTransform *m, CGFloat x, CGFloat y);
+extern void CGPathAddLineToPoint(CGMutablePathRef path,
+                                 const CGAffineTransform *m, CGFloat x,
+                                 CGFloat y);
+extern void CGPathAddQuadCurveToPoint(CGMutablePathRef path,
+                                      const CGAffineTransform *m, CGFloat cpx,
+                                      CGFloat cpy, CGFloat x, CGFloat y);
+extern void CGPathAddCurveToPoint(CGMutablePathRef path,
+                                  const CGAffineTransform *m, CGFloat cp1x,
+                                  CGFloat cp1y, CGFloat cp2x, CGFloat cp2y,
+                                  CGFloat x, CGFloat y);
+extern void CGPathCloseSubpath(CGMutablePathRef path);
+extern void CGPathAddRect(CGMutablePathRef path, const CGAffineTransform *m,
+                          CGRect rect);
+extern void CGPathAddRects(CGMutablePathRef path, const CGAffineTransform *m,
+                           const CGRect *rects, size_t count);
+extern void CGPathAddLines(CGMutablePathRef path, const CGAffineTransform *m,
+                           const CGPoint *points, size_t count);
+extern void CGPathAddEllipseInRect(CGMutablePathRef path,
+                                   const CGAffineTransform *m, CGRect rect);
+extern void CGPathAddRelativeArc(CGMutablePathRef path,
+                                 const CGAffineTransform *matrix, CGFloat x,
+                                 CGFloat y, CGFloat radius, CGFloat startAngle,
+                                 CGFloat delta);
+extern void CGPathAddArc(CGMutablePathRef path, const CGAffineTransform *m,
+                         CGFloat x, CGFloat y, CGFloat r, CGFloat startAngle,
+                         CGFloat endAngle, bool clockwise);
+extern void CGPathAddArcToPoint(CGMutablePathRef path,
+                                const CGAffineTransform *m, CGFloat x1,
+                                CGFloat y1, CGFloat x2, CGFloat y2, CGFloat r);
+extern void CGPathAddRoundedRect(CGMutablePathRef path,
+                                 const CGAffineTransform *m, CGRect rect,
+                                 CGFloat cornerWidth, CGFloat cornerHeight);
+extern void CGPathAddPath(CGMutablePathRef path1, const CGAffineTransform *m,
+                          CGPathRef path2);
+
+extern bool CGPathIsEmpty(CGPathRef path);
+extern bool CGPathIsRect(CGPathRef path, CGRect *rect);
+extern CGPoint CGPathGetCurrentPoint(CGPathRef path);
+extern CGRect CGPathGetBoundingBox(CGPathRef path);
+extern CGRect CGPathGetPathBoundingBox(CGPathRef path);
+extern bool CGPathContainsPoint(CGPathRef path, const CGAffineTransform *m,
+                                CGPoint point, bool eoFill);
+extern void CGPathApply(CGPathRef path, void *info,
+                        CGPathApplierFunction function);
+extern unsigned long CGPathGetTypeID(void);
+
+#ifdef __BLOCKS__
+typedef void (^CGPathApplyBlock)(const CGPathElement *element);
+extern void CGPathApplyWithBlock(CGPathRef path, CGPathApplyBlock block);
+#endif
 
 /* Spelled out rather than `M_PI`, which strict C modes hide. */
 static const double pi = 3.14159265358979323846;
