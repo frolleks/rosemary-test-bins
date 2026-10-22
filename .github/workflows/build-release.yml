@@ -1,12 +1,14 @@
 name: Build and release
 
-# Builds the CoreGraphics probe on a macOS runner and publishes the binaries
-# as a GitHub release. Push a tag (e.g. `v1.0.0`) to cut a release; run the
-# workflow manually to get the binaries as a downloadable workflow artifact
-# without creating a release.
+# Builds the CoreGraphics probes on a macOS runner and publishes the binaries
+# as a GitHub release. Every push to any branch cuts a release tagged
+# `build-<run>-<sha>`; pushing a `v*` tag cuts a release with that tag. A
+# manual run also publishes a release, using the generated tag.
 
 on:
   push:
+    branches:
+      - "**"
     tags:
       - "v*"
   workflow_dispatch:
@@ -33,41 +35,68 @@ jobs:
           xcrun --show-sdk-path
 
       # The documented recipe: an x86_64 guest binary to run under rosemary.
+      # `-fblocks` is needed for the `CGPathApplyWithBlock` probe.
       - name: Compile x86_64
-        run: cc -arch x86_64 -framework CoreGraphics -o cgtransform_probe cgtransform-probe.c
+        run: |
+          cc -arch x86_64 -fblocks -framework CoreGraphics -o cgtransform_probe cgtransform-probe.c
+          cc -arch x86_64 -fblocks -framework CoreGraphics -o cgpath_probe cgpath-probe.c
 
-      # A native slice so the output can be checked on the arm64 runner
-      # without depending on Rosetta.
+      # Native slices so the output can be checked on the arm64 runner without
+      # depending on Rosetta.
       - name: Compile arm64
-        run: cc -arch arm64 -framework CoreGraphics -o cgtransform_probe_arm64 cgtransform-probe.c
+        run: |
+          cc -arch arm64 -fblocks -framework CoreGraphics -o cgtransform_probe_arm64 cgtransform-probe.c
+          cc -arch arm64 -fblocks -framework CoreGraphics -o cgpath_probe_arm64 cgpath-probe.c
 
-      - name: Build universal binary
-        run: lipo -create -output cgtransform_probe_universal cgtransform_probe cgtransform_probe_arm64
+      - name: Build universal binaries
+        run: |
+          lipo -create -output cgtransform_probe_universal cgtransform_probe cgtransform_probe_arm64
+          lipo -create -output cgpath_probe_universal cgpath_probe cgpath_probe_arm64
 
       - name: Verify architectures
         run: |
-          file cgtransform_probe cgtransform_probe_arm64 cgtransform_probe_universal
+          file cgtransform_probe cgtransform_probe_arm64 cgtransform_probe_universal \
+               cgpath_probe cgpath_probe_arm64 cgpath_probe_universal
           lipo -info cgtransform_probe_universal
+          lipo -info cgpath_probe_universal
 
       - name: Smoke test (native)
         run: |
           case "$(uname -m)" in
-            arm64) native=cgtransform_probe_arm64 ;;
-            *)     native=cgtransform_probe ;;
+            arm64) suffix=_arm64 ;;
+            *)     suffix= ;;
           esac
-          "./$native" > expected.txt
-          cat expected.txt
+          "./cgtransform_probe$suffix" > expected-cgtransform.txt
+          "./cgpath_probe$suffix" > expected-cgpath.txt
+          cat expected-cgtransform.txt
+          cat expected-cgpath.txt
+
+      # A tag push keeps its tag; anything else gets a unique, traceable tag.
+      - name: Resolve release tag
+        id: release
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="build-${GITHUB_RUN_NUMBER}-$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Package
         run: |
           set -euo pipefail
-          name="cgtransform-probe-${GITHUB_REF_NAME}-macos"
+          name="cgprobes-${{ steps.release.outputs.tag }}-macos"
           mkdir -p "dist/$name"
           cp cgtransform_probe \
              cgtransform_probe_arm64 \
              cgtransform_probe_universal \
+             cgpath_probe \
+             cgpath_probe_arm64 \
+             cgpath_probe_universal \
              cgtransform-probe.c \
-             expected.txt \
+             cgpath-probe.c \
+             expected-cgtransform.txt \
+             expected-cgpath.txt \
              "dist/$name/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           ( cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256" )
@@ -75,18 +104,20 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cgtransform-probe-macos
+          name: cgprobes-macos
           path: |
             dist/*.tar.gz
             dist/*.sha256
           if-no-files-found: error
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.release.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/*.tar.gz
             dist/*.sha256
-          generate_release_notes: true
-          fail_on_unmatched_files: true
